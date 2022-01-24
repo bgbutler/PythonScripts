@@ -1,0 +1,77 @@
+---
+title: "Reticulate Intro"
+author: "Bryan Butler"
+date: "3/9/2021"
+output:
+    html_document:
+    toc: false
+    toc_depth: 1
+    fig_crop: no
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# {.tabset .tabset-fade .tabset-pills}
+
+
+<style>
+  .main-container {
+    max-width: 1200px !important;
+    margin-left: auto;
+    margin-right: auto;
+  }ibn
+</style>
+
+## About Me
+### - Current role Head of Analytics & Data Science at Eastern Bank
+### - BS & MS in Chemistry, MBA in Finance
+### - Spent 15 years in the insurance/reinsurance industry modeling risk
+### - Other roles in InsureTech, Banking, Marketing Research and Consulting
+### - I like to give back at StackOverflow - I am a Necromancer
+###
+![](/Users/Bryan/Desktop/StackOverflow.png)
+
+###
+![](/Users/Bryan/Desktop/Necromancer_SO.png)
+
+
+## Why Reticulate
+### Reticulate = Python + RStudio
+### Reticulate + RMarkdown + Plotly = Interactive Web Application
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/comic.png)
+
+## Corporate Life
+### Most Offices are Silos of Sad Cubicles
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/Sad_Cubicles_2.png)
+
+###
+### Leverage the Simplicity of Functional Programming with R
+###
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/ggplot2_masterpiece.png)
+
+###
+### Your End Result
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/Office-R-github.png)
+
+### Credit
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/Art_Allison_Horst.PNG)
+
+## Reticulate Tips
+### Setup
+#### - Set up a separate Python environment with Anaconda (I call mine reticulate)
+#### - Install PyQt5 in this environment; needed for rendering in a browser (it will break Spyder)
+#### - Create and .Renviron file and put it in your home directory (use Sys.getenv() and look for HOME)
+#### - Set the RETICULATE_PYTHON variable in the .Renviron file: RETICULATE_PYTHON="Path to your reticulate environment"
+#### - RETICULATE_PYTHON="/Users/Bryan/anaconda/envs/tensorflow2/bin/" on my Mac
+###
+### While Using
+#### - Need to use the print() command much more with Python, can't just call the object
+#### - Sometimes you need to add plt.clf() before you plot to clear Matplotlib out (if using)
+#### - Need to assign the plotting components to varaibles
+![](/Users/Bryan/Documents/DSInfo/TextAnalytics/plottingR.png)
+
+
+
