@@ -1,0 +1,166 @@
+---
+title: "WebFeedbackV4"
+output:
+    html_document:
+    toc: false
+    toc_depth: 1
+    fig_crop: no
+---
+
+
+```{r setup, include=FALSE}
+
+loc_dir = 'M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots'
+
+library(knitr)
+library(reticulate)
+library(readr)
+library(DT)
+knitr::knit_engines$set(python = reticulate::eng_python)
+knitr::opts_chunk$set(echo = FALSE, warning= FALSE, error =TRUE, message = FALSE, cache.lazy = FALSE, comment=NA)
+# knitr::opts_knit$set(root.dir = normalizePath(loc_dir)) 
+
+
+```
+
+
+# {.tabset .tabset-fade .tabset-pills}
+
+
+<style>
+  .main-container {
+    max-width: 1200px !important;
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>
+
+
+
+## Time Series
+### Yes/No Ratio Over Time
+```{r, timeseries, echo=FALSE, warning=FALSE, message=FALSE}
+setwd(loc_dir)
+
+htmltools::includeHTML("timeSeries.html")
+
+```
+
+
+
+
+### Page Results Over Time
+```{r, pageCounts}
+setwd(loc_dir)
+htmltools::includeHTML("pageCounts.html")
+
+```
+
+
+
+
+## Page Similarity
+### Dendrogram Comparing Comments by URL
+![](M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots/dendrogram.png)
+
+## Bigrams by Page
+```{r, plotBigrams}
+library(RTextTools) 
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Topics
+###  - Bigrams for Context
+### Online Banking<br>
+![](M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots/topic0.png)
+
+
+
+
+
+### Accounts<br>
+![](M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots/topic1.png)
+
+### Rates & General<br>
+![](M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots/topic2.png)
+
+### CX & Inquiries<br>
+![](M:/bbutler/DataScience/NLP/WebsiteFeedback/Plots/topic3.png)
+
+## Table of Data
+### Table Reflecting Values<br><br>
+```{r table}
+setwd(loc_dir)
+
+rdf = readr::read_csv('topicTable.csv')
+
+rdf = rdf[,c(1:5, 10,11)]
+
+
+
+DT::datatable(rdf,
+              extensions = 'Buttons',
+              fillContainer = FALSE,
+              options = list(dom = 'Bfrtip',
+                             pagelength = 25,
+                             lengthMenu = c(25, 50, 75, 100),
+                             buttons = list("excel", "csv")
+                             ))
+
+
+```
+
+
+
+## Interactive Topic Plot
+```{r, topicPlot}
+setwd(loc_dir)
+htmltools::includeHTML("topicPlot2D.html")
+
+```
+
+
+
+## Sentiment Analysis
+### Confidence Scores for Transformer Sentiment by Topic
+```{r, transformer}
+setwd(loc_dir)
+htmltools::includeHTML("transformer.html")
+```
+
+
+
+### Blended Sentiment Distribution
+```{r, sentiment}
+setwd(loc_dir)
+htmltools::includeHTML("sentiment.html")
+```
+
+
+
+## 3D Phrase Plot
+### - Hover to read, bubble size related to length of text
+```{r, threeDPlot}
+setwd(loc_dir)
+htmltools::includeHTML("3DPlot.html")
+```
