@@ -1,0 +1,181 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww20960\viewh14900\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs28 \cf0 import pandas as pd\
+import numpy as np\
+import folium\
+from folium import FeatureGroup\
+from branca.colormap import linear\
+import pgeocode\
+\
+# ---------------------------------------------\
+# LOAD DATA\
+# ---------------------------------------------\
+url = "/Users/Bryan/Documents/DSInfo/MappingDemo/PolicyListing.csv"\
+policy = pd.read_csv(url)\
+\
+# Convert PostalCode to string\
+policy["PostalCode"] = policy["PostalCode"].astype(str)\
+\
+# ---------------------------------------------\
+# ZIP \uc0\u8594  LAT/LON LOOKUP  (pgeocode \u8776  geocode_zip)\
+# ---------------------------------------------\
+geo = pgeocode.Nominatim("us")\
+zip_lookup = geo.query_postal_code(policy["PostalCode"])\
+\
+# Append lat/lon to policy\
+zipData = pd.concat([policy.reset_index(drop=True), zip_lookup[["latitude","longitude","state_code","place_name"]]], axis=1)\
+\
+zipData.rename(columns=\{"latitude":"lat", "longitude":"lng", \
+                        "place_name":"city", "state_code":"state"\}, inplace=True)\
+\
+# ---------------------------------------------\
+# JITTER LAT/LON (similar to R function)\
+# ---------------------------------------------\
+def jitter(n):\
+    return np.random.uniform(-1, 1, n) / 100\
+\
+zipData["JitterLat"] = jitter(len(zipData))\
+zipData["JitterLon"] = jitter(len(zipData))\
+\
+zipData["Lat"] = zipData["lat"] + zipData["JitterLat"]\
+zipData["Lon"] = zipData["lng"] + zipData["JitterLon"]\
+\
+# ---------------------------------------------\
+# CREATE NUMERIC BINS (cut)\
+# ---------------------------------------------\
+zipData["tiv"] = zipData[["BuildingValue","ContentsValue","OtherValue","TimeElementValue"]].sum(axis=1)\
+\
+zipData["tivLvl"] = pd.cut(\
+    zipData["tiv"],\
+    bins=[0,100000,200000,300000,400000,10000000],\
+    labels=["<$100K","$100-200K","$200-300K","$300K-400K","$400K+"],\
+    include_lowest=True\
+)\
+\
+zipData["yrBuiltLvl"] = pd.cut(\
+    zipData["YearBuilt"],\
+    bins=[0,1994,2004,2018],\
+    labels=["Pre 1994","1994\'962004","2004\'962019"],\
+    include_lowest=False\
+)\
+\
+zipData["roofYrBuiltLvl"] = pd.cut(\
+    zipData["RoofYearBuilt"],\
+    bins=[0,1994,2004,2018],\
+    labels=["Pre 1994","1994\'962004","2004\'962019"],\
+    include_lowest=False\
+)\
+\
+# ---------------------------------------------\
+# POPUP HTML\
+# ---------------------------------------------\
+def make_popup(row):\
+    return folium.Popup(f"""\
+        <strong>\{row['Street']\}</strong><br>\
+        TIV = $\{row['tiv']:,.0f\}<br>\
+        City: \{row['city']\}<br>\
+        YrBuilt = \{row['YearBuilt']\}<br>\
+        Construction = \{row['ConstructionCode']\}<br>\
+        Occupancy = \{row['OccupancyCode']\}<br>\
+        Premium = $\{row['Premium']:,.0f\}<br>\
+        GrossArea = \{row['GrossArea']:,.0f\}<br>\
+        RoofYr = \{row['RoofYearBuilt']\}<br>\
+    """, max_width=250)\
+\
+zipData["popUp"] = zipData.apply(make_popup, axis=1)\
+\
+# ---------------------------------------------\
+# COLOR MAPPERS (\uc0\u8776  leaflet::colorFactor)\
+# ---------------------------------------------\
+import matplotlib.cm as cm\
+import matplotlib.colors as mcolors\
+\
+def categorical_color_map(values, palette):\
+    """Returns a dict mapping each category to a color."""\
+    unique_vals = sorted(values.dropna().unique())\
+    cmap = cm.get_cmap(palette, len(unique_vals))\
+    return \{val: mcolors.to_hex(cmap(i)) for i, val in enumerate(unique_vals)\}\
+\
+colorsConst = categorical_color_map(zipData["ConstructionCode"], "rainbow")\
+colorsYrBuilt = categorical_color_map(zipData["yrBuiltLvl"], "Spectral")\
+colorsTiv = categorical_color_map(zipData["tivLvl"], "Accent")\
+\
+# ---------------------------------------------\
+# CREATE MAP\
+# ---------------------------------------------\
+m = folium.Map(location=[30, -90], zoom_start=10, tiles=None)\
+\
+# Base layers\
+folium.TileLayer("OpenStreetMap", name="Open SM").add_to(m)\
+folium.TileLayer("CartoDB dark_matter", name="Toner").add_to(m)\
+folium.TileLayer("CartoDB positron", name="CartoDB").add_to(m)\
+folium.TileLayer("Esri NatGeoWorldMap", name="NG World").add_to(m)\
+folium.TileLayer("Esri WorldImagery", name="Sat").add_to(m)\
+\
+# ---------------------------------------------\
+# OVERLAY: CONSTRUCTION\
+# ---------------------------------------------\
+fg_const = FeatureGroup(name="Construction", overlay=True)\
+for _, r in zipData.iterrows():\
+    folium.CircleMarker(\
+        location=[r["Lat"], r["Lon"]],\
+        radius=5,\
+        color=colorsConst.get(r["ConstructionCode"], "gray"),\
+        fill=True,\
+        popup=r["popUp"]\
+    ).add_to(fg_const)\
+fg_const.add_to(m)\
+\
+# ---------------------------------------------\
+# OVERLAY: TIV\
+# ---------------------------------------------\
+fg_tiv = FeatureGroup(name="TIV", overlay=True)\
+for _, r in zipData.iterrows():\
+    folium.CircleMarker(\
+        location=[r["Lat"], r["Lon"]],\
+        radius=r["tiv"] / 20000,\
+        color=colorsTiv.get(r["tivLvl"], "gray"),\
+        fill=True,\
+        popup=r["popUp"]\
+    ).add_to(fg_tiv)\
+fg_tiv.add_to(m)\
+\
+# ---------------------------------------------\
+# OVERLAY: Year Built\
+# ---------------------------------------------\
+fg_yr = FeatureGroup(name="Yr Built", overlay=True)\
+for _, r in zipData.iterrows():\
+    folium.CircleMarker(\
+        location=[r["Lat"], r["Lon"]],\
+        radius=r["YearBuilt"] / 250,\
+        color=colorsYrBuilt.get(r["yrBuiltLvl"], "gray"),\
+        fill=True,\
+        popup=r["popUp"]\
+    ).add_to(fg_yr)\
+fg_yr.add_to(m)\
+\
+# ---------------------------------------------\
+# Layer Control\
+# ---------------------------------------------\
+folium.LayerControl(collapsed=False).add_to(m)\
+\
+# ---------------------------------------------\
+# Legends (Folium does not have built-in categorical legend \uc0\u8594  HTML)\
+# ---------------------------------------------\
+legend_html = """\
+<div style="position: fixed; bottom: 20px; left: 20px; z-index:9999; \
+     background:white; padding:10px; border:2px solid black;">\
+<strong>Construction Code</strong><br>\
+""" + "".join([f"<div style='background:\{col\};width:20px;height:10px;display:inline-block;'></div> \{val\}<br>"\
+               for val, col in colorsConst.items()]) + "</div>"\
+\
+m.get_root().html.add_child(folium.Element(legend_html))\
+\
+# Show map in Jupyter\
+m\
+}
