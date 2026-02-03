@@ -1,0 +1,339 @@
+# this is the basic way to set it up
+!pip install openpyxl
+
+import pandas as pd
+import subprocess
+import sys
+import os
+
+# checks if polars is imported
+try:
+    import folium as fl
+except ImportError:
+    print("Folium not found. Installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "folium"])
+    import folium as fl
+
+from folium import FeatureGroup
+from branca.colormap import linear
+
+from folium.plugins import MarkerCluster, HeatMap
+from branca.element import Element
+
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+pd.set_option('display.float_format', lambda x: f"{x:.4f}")
+
+# for S3 file access
+import s3fs
+
+print(sys.version_info)
+print(sys.executable)
+os.getcwd()
+
+
+# make some cuts of TIV, CovA, YearBuilt, AAL, EventGrossLossContribution
+
+# TIV will not be used
+nj_data['TIV_bin'] = pd.cut(
+    nj_data['TIV'],
+    bins = [0,1000000, 1500000, 2000000, 5000000,20000000],
+    labels=['<$1M', '$1M-1.5M', '$1.5M-2M', '$2M-5M', '$5M+'],
+    include_lowest=True
+)
+
+# go with CovA
+nj_data['CovA_bin'] = pd.cut(
+    nj_data['CovA'],
+    bins = [0,750000, 1000000, 1500000, 2000000,50000000],
+    labels=['<$750K', '$750K-1M', '$1M-1.5M', '$1.5M-5M', '$5M+'],
+    include_lowest=True
+)
+
+# Year built
+nj_data['YrBuilt_bin'] = pd.cut(
+    nj_data['YearBuilt'],
+    bins = [0,1994, 2004, 2014, 2024, 2030],
+    labels=['Pre 1994', '1994-2004', '2004-2014', '2014-2024', '2024+'],
+    include_lowest=True
+)
+
+# Cat loss ratio
+nj_data['CatLR_bin'] = pd.cut(
+    nj_data['Cat LR'],
+    bins = [0,0.10, 0.25, 0.30, 0.50, 1.00],
+    labels=['<10%', '10-25%', '25-30%', '30-50%', '50%+'],
+    include_lowest=True
+)
+
+
+# for 1/100 Event
+nj_data['EventGrLoss_bin'] = pd.cut(
+    nj_data['EventGrLoss'],
+    bins = [0,18000, 20000, 25000, 50000,100000],
+    labels=['<$18K', '$18-20K', '$20-25K', '$25-50K', '$50K+'],
+    include_lowest=True
+)
+
+
+# make a popup function
+
+def make_popup(row):
+    return f"""
+        <strong>{row['County']}</strong><br>
+        CovA = ${row['CovA']:,.0f}<br>
+        TIV = ${row['TIV']:,.0f}<br>
+        City: {row['City']}<br>
+        YrBuilt = {row['YearBuilt']}<br>
+        Construction = {row['AIRConstructionA']}<br>
+        AAL = {row['GrAAL']:,.0f}<br>
+        Event 1/100 = {row['EventGrLoss']:,.0f}<br>
+        Premium = ${row['PolicyPremium']:,.0f}<br>
+        SF = {row['SF']:,.0f}<br>
+        CatLR = {row['Cat LR']*100:,.0f}%<br>
+    """
+    
+
+# make the popop
+nj_data["Popup"] = nj_data.apply(make_popup, axis=1)
+
+# store HTML strings (not Popup objects) in the DataFrame
+# nj_data["PopupHTML"] = nj_data.apply(make_popup_html, axis=1)
+
+nj_data.head()
+
+
+## new categorical color mapping function
+
+def categorical_color_map(values, palette: str):
+    """
+    Map each ordered category (from pd.cut) to a color from the given palette.
+    Ensures lower bins get lighter colors and higher bins get darker colors.
+    """
+    cat = pd.Categorical(values)
+    categories = list(cat.categories)  # preserves pd.cut bin order
+    n = len(categories)
+    if n == 0:
+        return {}
+
+    # Discrete colormap with n colors (YlOrRd: light -> dark)
+    cmap = plt.get_cmap(palette, n)
+    hex_colors = [mcolors.to_hex(cmap(i / (n - 1) if n > 1 else 0)) for i in range(n)]
+
+    # ✅ The previously cut-off line:
+    return {val: hex_colors[i] for i, val in enumerate(categories)}
+
+
+# make color palettes
+colorsLR = categorical_color_map(nj_data['CatLR_bin'], 'YlOrRd')
+colorsYrBuilt = categorical_color_map(nj_data['YrBuilt_bin'], 'Set2')
+colorsTIV = categorical_color_map(nj_data['TIV_bin'], 'Greens')  # created but not to be used 
+colorsCovA = categorical_color_map(nj_data['CovA_bin'], 'Greens')
+colorsEvent = categorical_color_map(nj_data['EventGrLoss_bin'], 'Reds')
+
+
+# create a function to make legends for each metric
+
+def add_legend(title, items, position='left', indent='10px'):
+    
+    legend_html = f"""
+    <div style="
+    position: fixed; bottom: 30px; {position}: {indent}; z-index: 10010;
+    background: rgba(255,255,255,0.92);
+    padding: 4px 6px; border: 1px solid #333; border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    font-family: Arial, sans-serif; font-size: 10px; line-height: 1.2;
+    pointer-events: none;
+">
+  <div style="font-weight:600; margin-bottom:2px;">{title}</div>
+  { "".join([
+      f"<div style='display:flex;align-items:center;margin:1px 0;'>"
+      f"<span style='width:12px;height:8px;display:inline-block;"
+      f"background:{col};border:1px solid #333;margin-right:4px;'></span>"
+      f"<span>{val}</span></div>"
+      for val, col in items.items()
+    ]) }
+</div>
+"""
+    return legend_html
+   
+
+
+# make the map
+
+m = fl.Map(location=[40.5, -74], zoom_start=10, tiles=None)
+
+# ---------------------------------------------
+# MAP TYPES: Set up different types of maps
+# ---------------------------------------------
+# Base layers
+fl.TileLayer("OpenStreetMap", name="Open SM", control=True).add_to(m)
+fl.TileLayer("CartoDB dark_matter", name="Toner", control=True).add_to(m)
+fl.TileLayer("CartoDB positron", name="CartoDB", control=True).add_to(m)
+
+# Hybrid stule map
+fl.TileLayer(
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
+    attr="Tiles © Esri — National Geographic, Esri, etc.",
+    name="NG World"
+).add_to(m)
+
+# Satellite
+fl.TileLayer(
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr="Tiles © Esri — World Imagery",
+    name="Sat"
+).add_to(m)
+
+# ---------------------------------------------
+# OVERLAY: Gross 1/100 Contribution
+# ---------------------------------------------
+fg_contribution = FeatureGroup(name='1/100 Event Loss', overlay=True)
+for _, r in nj_data.iterrows():
+    color=colorsEvent.get(r['EventGrLoss_bin'], 'gray')
+    radius=r['EventGrLoss']/2000
+    
+    fl.CircleMarker(
+        location=[r["Lat"], r["Lon"]],
+        radius=radius,
+        color=color,
+        fill_color=color,
+        fill=True,
+        fill_opacity=0.7,
+        popup=fl.Popup((r['Popup']), max_width=300),
+        tooltip=f"1/100 Loss: ${r['EventGrLoss']:,.0f}"
+    ).add_to(fg_contribution)
+
+
+
+# ---------------------------------------------
+# OVERLAY: Loss Ratio
+# ---------------------------------------------
+fg_cat_lr = FeatureGroup(name="Cat Loss Ratio", overlay=True)
+for _, r in nj_data.iterrows():
+    color=colorsLR.get(r["CatLR_bin"], "gray")
+    
+    fl.CircleMarker(
+        location=[r["Lat"], r["Lon"]],
+        radius=(r['Cat LR']*10)**2,
+        color=color,
+        fill_color=color,
+        fill=True,
+        fill_opacity=0.6,
+        popup=fl.Popup((r['Popup']), max_width=300),
+        tooltip=f"Cat LR: {r['Cat LR']*100:.0f}%"
+    ).add_to(fg_cat_lr)
+
+
+# ---------------------------------------------
+# OVERLAY: TIV
+# ---------------------------------------------
+fg_tiv = FeatureGroup(name="TIV", overlay=True)
+for _, r in nj_data.iterrows():
+    color=colorsTIV.get(r["TIV_bin"], "gray")
+    radius=(r['TIV']/1000000)*2
+    
+    fl.CircleMarker(
+        location=[r["Lat"], r["Lon"]],
+        color=color,
+        radius=radius,
+        fill_color=color,
+        fill=True,
+        fill_opacity=0.6,
+        popup=fl.Popup(str(r['Popup']), max_width=300),
+        tooltip=f"TIV: ${r['TIV']:,.0f}"
+    ).add_to(fg_tiv)
+
+
+# ---------------------------------------------
+# OVERLAY: CovA
+# ---------------------------------------------
+fg_cova = FeatureGroup(name="CovA", overlay=True)
+for _, r in nj_data.iterrows():
+    color=colorsCovA.get(r["CovA_bin"], "gray")
+    radius=(r['CovA']/1000000)*5
+    
+    fl.CircleMarker(
+        location=[r["Lat"], r["Lon"]],
+        color=color,
+        radius=radius,
+        fill_color=color,
+        fill=True,
+        fill_opacity=0.6,
+        popup=fl.Popup(str(r['Popup']), max_width=300),
+        tooltip=f"CovA: ${r['CovA']:,.0f}"
+    ).add_to(fg_cova)
+
+
+
+
+# ---------------------------------------------
+# OVERLAY: Year Built
+# ---------------------------------------------
+fg_yr = FeatureGroup(name="Yr Built", overlay=True)
+for _, r in nj_data.iterrows():
+    color=colorsYrBuilt.get(r["YrBuilt_bin"], "gray")
+    
+    fl.CircleMarker(
+        location=[r["Lat"], r["Lon"]],
+        radius=5,
+        color=color,
+        fill_color=color,
+        fill=True,
+        fill_opacity=0.6,
+        popup=fl.Popup(str(r['Popup']), max_width=300),
+        tooltip=f"Yr Built: {r['YearBuilt']}"
+    ).add_to(fg_yr)
+
+
+# ---------------------------------------------
+# Add Layers to map
+# ---------------------------------------------
+fg_tiv.add_to(m)
+fg_cova.add_to(m)
+fg_cat_lr.add_to(m)
+fg_contribution.add_to(m)
+fg_yr.add_to(m)
+
+
+
+# ---------------------------------------------
+# Layer Control
+# ---------------------------------------------
+fl.LayerControl(collapsed=False).add_to(m)
+
+# ---------------------------------------------
+# Legends (fl does not have built-in categorical legend uc0u8594  HTML)
+# ---------------------------------------------
+
+# Compact TIV legend in lower-left
+tiv_legend_html = add_legend('TIV', colorsTIV)
+cova_legend_html = add_legend('CovA', colorsCovA, indent='100px')
+catlr_legend_html = add_legend('Cat LR', colorsLR, indent='200px')
+event_legend_html = add_legend('1in100 Yr Loss', colorsEvent, position='right', indent='100px')
+yr_built_legend_html = add_legend('Yr Built', colorsYrBuilt, position='right')
+
+
+# IMPORTANT: attach to the map root BEFORE displaying map m
+m.get_root().html.add_child(Element(tiv_legend_html))
+m.get_root().html.add_child(Element(cova_legend_html))
+m.get_root().html.add_child(Element(catlr_legend_html))
+m.get_root().html.add_child(Element(event_legend_html))
+m.get_root().html.add_child(Element(yr_built_legend_html))
+    
+
+
+
+
+# show the map
+m
+
+
+
+
+
+
+
+
+
