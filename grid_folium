@@ -45,3 +45,11 @@ folium.LayerControl().add_to(m)
 
 # m.save("grid_density_map.html")
 m
+
+# tips render non-zero grids
+grid_wgs = grid_wgs[grid_wgs["risk_count"] > 0].copy()
+
+# simplify geometry
+grid_wgs["geometry"] = grid_wgs.geometry.simplify(tolerance=0.0005, preserve_topology=True)
+
+
