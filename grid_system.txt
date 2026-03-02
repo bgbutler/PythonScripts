@@ -1,0 +1,157 @@
+# Standard imports
+# this is the basic way to set it up
+!pip install openpyxl
+
+
+# get the environment
+import sys
+print(sys.version)
+print(sys.executable)
+import subprocess
+import os
+os.getcwd()
+
+
+import pandas as pd
+import numpy as np
+
+# checks if geopandas is imported
+try:
+    import geopandas as gpd
+except ImportError:
+    print("geopandas not found. Installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "geopandas"])
+    import geopandas as gpd
+
+# get shapely
+!pip install shapely
+from shapely.geometry import box
+
+# set options
+pd.set_option('display.max_columns', 20)
+pd.set_option('display.max_rows', 100)
+pd.options.display.float_format = '{:.4f}'.format
+
+# get data
+
+df = df.rename(columns = {'SquareFootage': 'SF',
+                                   'TSv12_HU_GR_AAL': 'GrAAL',
+                                   'Event_GrossLoss_Contribution': 'EventGrLoss',
+                                   'AAL_to_Prem_Ratio': 'Cat LR',
+                                   'Latitude': 'Lat',
+                                   'Longitude': 'Lon'})
+
+df.columns
+
+nj_data = df[['TIV','Lat', 'Lon']]
+
+# Expect columns: lat, lon, TIV, CoverageA (names can be adapted)
+gdf = gpd.GeoDataFrame(
+    nj_data,
+    geometry=gpd.points_from_xy(df["Lon"], df["Lat"]),
+    crs="EPSG:4326"
+)
+
+# -------------------------
+# 2) Project to a meter-based CRS
+# -------------------------
+# Easy, robust option for a single state: UTM zone based on data centroid
+centroid = gdf.geometry.union_all().centroid
+lon0, lat0 = centroid.x, centroid.y
+utm_zone = int((lon0 + 180) // 6) + 1
+epsg_utm = 32600 + utm_zone if lat0 >= 0 else 32700 + utm_zone  # WGS84 / UTM
+
+gdf_m = gdf.to_crs(epsg=epsg_utm)
+
+# -------------------------
+# 3) Build a grid covering the points
+# -------------------------
+# Choose grid resolution (meters). Example: 5 km cells
+cell_size_m = 5000
+
+minx, miny, maxx, maxy = gdf_m.total_bounds
+
+# Snap bounds to grid
+minx = np.floor(minx / cell_size_m) * cell_size_m
+miny = np.floor(miny / cell_size_m) * cell_size_m
+maxx = np.ceil(maxx / cell_size_m) * cell_size_m
+maxy = np.ceil(maxy / cell_size_m) * cell_size_m
+
+xs = np.arange(minx, maxx, cell_size_m)
+ys = np.arange(miny, maxy, cell_size_m)
+
+grid_polys = []
+grid_ids = []
+k = 0
+for x in xs:
+    for y in ys:
+        grid_polys.append(box(x, y, x + cell_size_m, y + cell_size_m))
+        grid_ids.append(k)
+        k += 1
+
+grid = gpd.GeoDataFrame({"grid_id": grid_ids}, geometry=grid_polys, crs=gdf_m.crs)
+
+# Optional: keep only grid cells that actually intersect at least one point
+# (this speeds up later steps and reduces output size)
+grid = grid[grid.intersects(gdf_m.union_all())].copy()
+
+# -------------------------
+# 4) Spatial join points -> grid cells
+# -------------------------
+# predicate='within' usually works; 'intersects' is fine too
+joined = gpd.sjoin(gdf_m, grid, how="left", predicate="within")
+
+# -------------------------
+# 5) Aggregate by grid cell
+# -------------------------
+agg = (
+    joined.groupby("grid_id", dropna=False)
+    .agg(
+        risk_count=("geometry", "size"),
+        tiv_sum=("TIV", "sum"),
+        #covA_sum=("CoverageA", "sum"),
+    )
+    .reset_index()
+)
+
+grid_out = grid.merge(agg, on="grid_id", how="left").fillna(
+    {"risk_count": 0, "tiv_sum": 0.0, "covA_sum": 0.0}
+)
+
+# -------------------------
+# 6) Compute density metrics
+# -------------------------
+cell_area_m2 = cell_size_m * cell_size_m
+grid_out["tiv_per_sqkm"] = grid_out["tiv_sum"] / (cell_area_m2 / 1_000_000)
+grid_out["risks_per_sqkm"] = grid_out["risk_count"] / (cell_area_m2 / 1_000_000)
+
+# If you want sq miles:
+SQM_PER_SQMI = 2_589_988.110336
+grid_out["tiv_per_sqmi"] = grid_out["tiv_sum"] / (cell_area_m2 / SQM_PER_SQMI)
+grid_out["risks_per_sqmi"] = grid_out["risk_count"] / (cell_area_m2 / SQM_PER_SQMI)
+
+
+# -------------------------
+# 7) Export
+# -------------------------
+# Tabular (centroid per cell for easy BI tools)
+grid_out["centroid_x"] = grid_out.geometry.centroid.x
+grid_out["centroid_y"] = grid_out.geometry.centroid.y
+
+# this is a geopandas dataframe
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
