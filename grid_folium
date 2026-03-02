@@ -34,6 +34,50 @@ tooltip = folium.GeoJsonTooltip(
     localize=True,
 )
 
+
+
+
+#### ALTERNATIVE MAP WITH CIRCLES
+# 1️⃣ Compute centroids in projected CRS (meters)
+grid_proj = grid_out.copy()  # still in UTM from earlier step
+
+grid_proj["centroid"] = grid_proj.geometry.centroid
+
+# Create a GeoDataFrame of centroids
+centroids_proj = gpd.GeoDataFrame(
+    grid_proj.drop(columns="geometry"),
+    geometry=grid_proj["centroid"],
+    crs=grid_proj.crs
+)
+
+# 2️⃣ Convert centroids to WGS84 for Folium
+centroids_wgs = centroids_proj.to_crs(epsg=4326)
+
+# 3️⃣ Extract lat/lon safely
+centroids_wgs["lat"] = centroids_wgs.geometry.y
+centroids_wgs["lon"] = centroids_wgs.geometry.x
+
+for _, r in grid_wgs.iterrows():
+    if r["risk_count"] == 0:
+        continue
+    radius = 2 + 8 * (np.log1p(r["tiv_sum"]) / (np.log1p(grid_wgs["tiv_sum"].max()) + 1e-9))
+    folium.CircleMarker(
+        location=[r["lat"], r["lon"]],
+        radius=float(radius),
+        fill=True,
+        fill_opacity=0.6,
+        opacity=0.6,
+        tooltip=(
+            f"grid_id={int(r['grid_id'])}<br>"
+            f"risks={int(r['risk_count'])}<br>"
+            f"TIV={r['tiv_sum']:,.0f}<br>"
+            f"TIV/sqmi={r['tiv_per_sqmi']:,.0f}"
+        ),
+    ).add_to(m)
+
+# m.save("grid_centroids_map.html")
+m
+
 folium.GeoJson(
     grid_wgs,
     name="Grid density",
