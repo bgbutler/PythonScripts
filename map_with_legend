@@ -1,0 +1,178 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from branca.element import MacroElement
+from jinja2 import Template
+
+# Create bins column (use your bins/labels or modify as needed)
+grid_wgs['TIV_bin'] = pd.cut(
+    grid_wgs['tiv_sum'],
+    bins=[0, 1_000_000, 20_000_000, 50_000_000, 75_000_000, np.inf],
+    labels=['<$1M', '$1M-20M', '$20M-50M', '$5M-75M', '$75M+'],
+    include_lowest=True
+)
+
+def categorical_color_map(values, palette: str = "YlOrRd"):
+    cat = pd.Categorical(values)
+    categories = list(cat.categories)
+    n = len(categories)
+    if n == 0:
+        return {}
+    cmap = plt.get_cmap(palette, n)
+    # produce hex colors from light -> dark
+    hex_colors = [mcolors.to_hex(cmap(i / (n - 1) if n > 1 else 0)) for i in range(n)]
+    return {val: hex_colors[i] for i, val in enumerate(categories)}
+
+# IMPORTANT: make sure bin values become strings in GeoJSON properties
+grid_wgs["TIV_bin_str"] = grid_wgs["TIV_bin"].astype(str)
+
+# Create mapping
+cat_colors = categorical_color_map(grid_wgs['TIV_bin'].astype(object), palette="YlOrRd")
+
+# Example: add polygon style when you add GeoJson (so map polygons color by TIV_bin)
+# folium.GeoJson(..., style_function=lambda f: {"fillColor": cat_colors.get(f['properties']['TIV_bin'], "#ccc"), "color":"#444", "weight":0.3})
+
+# ---- create HTML categorical legend box ----
+items_html = "".join(
+    f"<div style='display:flex;align-items:center;margin-bottom:6px;'>"
+    f"<div style='width:18px;height:12px;background:{col};border:1px solid rgba(0,0,0,0.1);margin-right:8px;'></div>"
+    f"<div style='font-size:12px'>{label}</div></div>"
+    for label, col in cat_colors.items()
+)
+
+cat_legend_html = f"""
+<div id='cat-legend' style='position: fixed; bottom: 20px; left: 20px; z-index:9999;'>
+  <div style="
+        background: white;
+        padding: 8px 10px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size:12px;
+        color:#333;
+        min-width:130px;
+        ">
+    <div style="font-weight:600; margin-bottom:6px;">TIV bins</div>
+    {items_html}
+  </div>
+</div>
+"""
+
+
+# Center map on your exposure centroid
+center = grid_wgs.geometry.union_all().centroid
+m = fl.Map(location=[center.y, center.x], zoom_start=7, tiles="cartodbpositron")
+
+# Satellite
+fl.TileLayer(
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr="Tiles © Esri — World Imagery",
+    name="Sat"
+).add_to(m)
+
+def fmt_int_commas(x):
+    try:
+        return f"{int(round(float(x))):,}"
+    except Exception:
+        return ""
+
+def fmt_dollars_k(x):
+    """Format as $X.XK or $X,XXXK (x is in dollars)."""
+    try:
+        x = float(x)
+    except Exception:
+        return ""
+    xk = x / 1_000.0
+    if abs(xk) >= 100:
+        return f"${xk:,.0f}K"
+    else:
+        return f"${xk:,.1f}K"
+
+def fmt_num_tool(x, decimals=2):
+    try:
+        return f"{float(x):,.{decimals}f}"
+    except Exception:
+        return ""
+
+
+# this is for the grid - especially opacity
+# discrete style function (uses your bins + palette)
+def style_fn(feature):
+    b = feature["properties"].get("TIV_bin_str")
+    return {
+        "fillColor": cat_colors.get(b, "#cccccc"),
+        "color": "white",
+        "weight": 0.2,
+        "fillOpacity": 0.5,
+    }
+
+# Create formatted string columns for tooltip display
+grid_wgs["grid_id_fmt"]       = grid_wgs["grid_id"].astype("Int64").astype(str)
+grid_wgs["risk_count_fmt"]    = grid_wgs["risk_count"].apply(fmt_int_commas)
+
+grid_wgs["tiv_sum_fmt"]       = grid_wgs["tiv_sum"].apply(fmt_dollars_k)
+grid_wgs["tiv_per_sqmi_fmt"]  = grid_wgs["tiv_per_sqmi"].apply(fmt_dollars_k)
+
+# risks per sq mi is usually not currency; keep numeric with decimals + commas
+grid_wgs["risks_per_sqmi_fmt"] = grid_wgs["risks_per_sqmi"].apply(lambda x: fmt_num_tool(x, 3))
+
+
+tooltip = fl.GeoJsonTooltip(
+    fields=["grid_id_fmt", "risk_count_fmt", "tiv_sum_fmt", "tiv_per_sqmi_fmt", "risks_per_sqmi_fmt"],
+    aliases=["Grid", "Risks", "TIV", "TIV / sq mi", "Risks / sq mi"],
+    localize=False,
+    labels=True,
+    sticky=False,
+    style=(
+        "background-color: white; color: black; "
+        "font-family: arial; font-size: 12px; padding: 10px;"
+    ),
+)
+
+from shapely.geometry.base import BaseGeometry
+
+grid_wgs_folium = grid_wgs.copy()
+
+# Drop any columns that contain shapely geometries (Point/Polygon/etc) except the active geometry
+bad_cols = [
+    c for c in grid_wgs_folium.columns
+    if c != grid_wgs_folium.geometry.name
+    and grid_wgs_folium[c].map(lambda v: isinstance(v, BaseGeometry)).any()
+]
+
+grid_wgs_folium = grid_wgs_folium.drop(columns=bad_cols)
+
+
+fl.GeoJson(
+    grid_wgs_folium,
+    name="Grid density",
+    style_function=style_fn,
+    tooltip=tooltip,
+).add_to(m)
+
+fl.LayerControl().add_to(m)
+
+
+# Wrap it as a MacroElement so we can add it to the map
+class FloatLegend(MacroElement):
+    def __init__(self, html: str):
+        super().__init__()
+        self._name = "FloatLegend"
+        # store the HTML fragment on the instance so the template can access it via `this.html`
+        self.html = html
+        # define a macro that accepts `this` and `kwargs` — branca will call this macro
+        self._template = Template(
+            """
+            {% macro html(this, kwargs) %}
+                {{ this.html | safe }}
+            {% endmacro %}
+            """
+        )
+
+legend = FloatLegend(cat_legend_html)
+
+
+legend.add_to(m)
+
+# m.save("grid_density_map.html")
+m
