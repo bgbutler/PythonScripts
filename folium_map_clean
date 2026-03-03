@@ -1,0 +1,194 @@
+# Choose what to color by
+# Folium expects WGS84 (lat/lon), so convert
+import matplotlib.pyplot as plt
+
+import matplotlib.colors as mcolors
+
+from branca.element import MacroElement
+from jinja2 import Template
+
+grid_wgs = grid_out.to_crs(epsg=4326).copy()
+
+grid_wgs["tiv_sum"] = grid_wgs["tiv_sum"].round(0).astype(int)
+
+value_col = "tiv_sum"
+vmin = grid_wgs[value_col].min()
+vmax = grid_wgs[value_col].max()
+
+# Round limits (whole dollars)
+vmin_round = int(np.floor(vmin))
+vmax_round = int(np.ceil(vmax))
+
+# ---- helper: format in K ----
+def format_k_label(val):
+    """Return a string like '1.2K' or '5,000K' (no currency symbol so legend matches tooltip style)."""
+    val_k = val / 1_000.0
+    # Choose formatting rules:
+    if abs(val_k) >= 100:         # 100K+ -> no decimal, include thousands separators
+        return f"${val_k:,.0f}K"
+    else:                         # <100K -> one decimal point (e.g., 1.2K, 12.3K)
+        return f"${val_k:,.1f}K"
+
+# ---- build tick values and formatted labels ----
+# the 3 is the number of tick values
+tick_values = np.linspace(vmin_round, vmax_round, 4)
+tick_labels = [format_k_label(x) for x in tick_values]
+
+# ---- sample colors from a matplotlib cmap to make a CSS gradient ----
+# Use the same palette "YlOrRd" to match your colormap
+# n_stops is the number of colors
+cmap_mpl = plt.get_cmap("YlOrRd")
+n_stops = 9
+hex_colors = [mcolors.to_hex(cmap_mpl(i / (n_stops - 1))) for i in range(n_stops)]
+
+# Build CSS gradient stops string for left-to-right gradient
+gradient_stops = ", ".join(f"{hex_colors[i]} {int(100 * i / (n_stops - 1))}%" for i in range(n_stops))
+
+# ---- HTML template for white-box legend ----
+legend_html = f"""
+<div id='continuous-legend' style='position: fixed;
+     bottom: 20px; right: 20px; z-index:9999;'>
+  <div style="
+        background: white;
+        padding: 8px 10px;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size:12px;
+        color:#333;
+        min-width:600px;
+        ">
+    <div style="font-weight:600; margin-bottom:6px;">$TIV (Thousands)</div>
+
+    <!-- color bar -->
+    <div style="
+          height:14px;
+          border-radius:4px;
+          background: linear-gradient(to right, {gradient_stops});
+          border: 1px solid rgba(0,0,0,0.15);
+          margin-bottom:6px;
+          ">
+    </div>
+
+    <!-- tick labels row -->
+    <div style="display:flex; justify-content:space-between; margin-top:2px;">
+      {''.join(f"<span style='white-space:nowrap'>{lbl}</span>" for lbl in tick_labels)}
+    </div>
+  </div>
+</div>
+"""
+
+# now make the map
+
+# grid_out is your GeoDataFrame in a projected CRS (UTM).
+
+
+# Center map on your exposure centroid
+center = grid_wgs.geometry.union_all().centroid
+m = fl.Map(location=[center.y, center.x], zoom_start=7, tiles="cartodbpositron")
+
+# Satellite
+fl.TileLayer(
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attr="Tiles © Esri — World Imagery",
+    name="Sat"
+).add_to(m)
+
+def fmt_int_commas(x):
+    try:
+        return f"{int(round(float(x))):,}"
+    except Exception:
+        return ""
+
+def fmt_dollars_k(x):
+    """Format as $X.XK or $X,XXXK (x is in dollars)."""
+    try:
+        x = float(x)
+    except Exception:
+        return ""
+    xk = x / 1_000.0
+    if abs(xk) >= 100:
+        return f"${xk:,.0f}K"
+    else:
+        return f"${xk:,.1f}K"
+
+def fmt_num(x, decimals=2):
+    try:
+        return f"{float(x):,.{decimals}f}"
+    except Exception:
+        return ""
+
+
+# this is for the grid - especially opacity
+def style_fn(feature):
+    val = feature["properties"].get(value_col, 0) or 0
+    return {
+        "fillColor": colormap(val),
+        "color": "white",
+        "weight": 0.2,
+        "fillOpacity": 0.5,
+    }
+
+# Create formatted string columns for tooltip display
+grid_wgs["grid_id_fmt"]       = grid_wgs["grid_id"].astype("Int64").astype(str)
+grid_wgs["risk_count_fmt"]    = grid_wgs["risk_count"].apply(fmt_int_commas)
+
+grid_wgs["tiv_sum_fmt"]       = grid_wgs["tiv_sum"].apply(fmt_dollars_k)
+grid_wgs["tiv_per_sqmi_fmt"]  = grid_wgs["tiv_per_sqmi"].apply(fmt_dollars_k)
+
+# risks per sq mi is usually not currency; keep numeric with decimals + commas
+grid_wgs["risks_per_sqmi_fmt"] = grid_wgs["risks_per_sqmi"].apply(lambda x: fmt_num(x, 3))
+
+
+tooltip = fl.GeoJsonTooltip(
+    fields=["grid_id_fmt", "risk_count_fmt", "tiv_sum_fmt", "tiv_per_sqmi_fmt", "risks_per_sqmi_fmt"],
+    aliases=["Grid", "Risks", "TIV", "TIV / sq mi", "Risks / sq mi"],
+    localize=False,
+    labels=True,
+    sticky=False,
+    style=(
+        "background-color: white; color: black; "
+        "font-family: arial; font-size: 12px; padding: 10px;"
+    ),
+)
+
+fl.GeoJson(
+    grid_wgs,
+    name="Grid density",
+    style_function=style_fn,
+    tooltip=tooltip,
+).add_to(m)
+
+fl.LayerControl().add_to(m)
+
+
+# Wrap it as a MacroElement so we can add it to the map
+class FloatLegend(MacroElement):
+    def __init__(self, html: str):
+        super().__init__()
+        self._name = "FloatLegend"
+        # store the HTML fragment on the instance so the template can access it via `this.html`
+        self.html = html
+        # define a macro that accepts `this` and `kwargs` — branca will call this macro
+        self._template = Template(
+            """
+            {% macro html(this, kwargs) %}
+                {{ this.html | safe }}
+            {% endmacro %}
+            """
+        )
+
+legend = FloatLegend(legend_html)
+
+
+legend.add_to(m)
+
+# m.save("grid_density_map.html")
+m
+
+
+
+
+
+
+
