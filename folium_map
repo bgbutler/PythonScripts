@@ -33,35 +33,35 @@ print(sys.executable)
 os.getcwd()
 
 
-# make some cuts of TIV, CovA, YearBuilt, AAL, EventGrossLossContribution
+# make some cuts of val1, val2, YearBuilt, AAL, EventGrossLossContribution
 
-# TIV will not be used
-nj_data['TIV_bin'] = pd.cut(
-    nj_data['TIV'],
+# val1 will not be used
+df['val1_bin'] = pd.cut(
+    df['val1'],
     bins = [0,1000000, 1500000, 2000000, 5000000,20000000],
     labels=['<$1M', '$1M-1.5M', '$1.5M-2M', '$2M-5M', '$5M+'],
     include_lowest=True
 )
 
-# go with CovA
-nj_data['CovA_bin'] = pd.cut(
-    nj_data['CovA'],
+# go with val2
+df['val2_bin'] = pd.cut(
+    df['val2'],
     bins = [0,750000, 1000000, 1500000, 2000000,50000000],
     labels=['<$750K', '$750K-1M', '$1M-1.5M', '$1.5M-5M', '$5M+'],
     include_lowest=True
 )
 
 # Year built
-nj_data['YrBuilt_bin'] = pd.cut(
-    nj_data['YearBuilt'],
+df['Yr_bin'] = pd.cut(
+    df['YearBuilt'],
     bins = [0,1994, 2004, 2014, 2024, 2030],
     labels=['Pre 1994', '1994-2004', '2004-2014', '2014-2024', '2024+'],
     include_lowest=True
 )
 
 # Cat loss ratio
-nj_data['CatLR_bin'] = pd.cut(
-    nj_data['Cat LR'],
+df['Val3_bin'] = pd.cut(
+    df['Cat LR'],
     bins = [0,0.10, 0.25, 0.30, 0.50, 1.00],
     labels=['<10%', '10-25%', '25-30%', '30-50%', '50%+'],
     include_lowest=True
@@ -69,8 +69,8 @@ nj_data['CatLR_bin'] = pd.cut(
 
 
 # for 1/100 Event
-nj_data['EventGrLoss_bin'] = pd.cut(
-    nj_data['EventGrLoss'],
+df['EventGrLoss_bin'] = pd.cut(
+    df['EventGrLoss'],
     bins = [0,18000, 20000, 25000, 50000,100000],
     labels=['<$18K', '$18-20K', '$20-25K', '$25-50K', '$50K+'],
     include_lowest=True
@@ -82,26 +82,26 @@ nj_data['EventGrLoss_bin'] = pd.cut(
 def make_popup(row):
     return f"""
         <strong>{row['County']}</strong><br>
-        CovA = ${row['CovA']:,.0f}<br>
-        TIV = ${row['TIV']:,.0f}<br>
+        val2 = ${row['val2']:,.0f}<br>
+        val1 = ${row['val1']:,.0f}<br>
         City: {row['City']}<br>
-        YrBuilt = {row['YearBuilt']}<br>
+        Yr = {row['YearBuilt']}<br>
         Construction = {row['AIRConstructionA']}<br>
         AAL = {row['GrAAL']:,.0f}<br>
         Event 1/100 = {row['EventGrLoss']:,.0f}<br>
         Premium = ${row['PolicyPremium']:,.0f}<br>
         SF = {row['SF']:,.0f}<br>
-        CatLR = {row['Cat LR']*100:,.0f}%<br>
+        Val3 = {row['Cat LR']*100:,.0f}%<br>
     """
     
 
 # make the popop
-nj_data["Popup"] = nj_data.apply(make_popup, axis=1)
+df["Popup"] = df.apply(make_popup, axis=1)
 
 # store HTML strings (not Popup objects) in the DataFrame
-# nj_data["PopupHTML"] = nj_data.apply(make_popup_html, axis=1)
+# df["PopupHTML"] = df.apply(make_popup_html, axis=1)
 
-nj_data.head()
+df.head()
 
 
 ## new categorical color mapping function
@@ -126,11 +126,11 @@ def categorical_color_map(values, palette: str):
 
 
 # make color palettes
-colorsLR = categorical_color_map(nj_data['CatLR_bin'], 'YlOrRd')
-colorsYrBuilt = categorical_color_map(nj_data['YrBuilt_bin'], 'Set2')
-colorsTIV = categorical_color_map(nj_data['TIV_bin'], 'Greens')  # created but not to be used 
-colorsCovA = categorical_color_map(nj_data['CovA_bin'], 'Greens')
-colorsEvent = categorical_color_map(nj_data['EventGrLoss_bin'], 'Reds')
+colorsLR = categorical_color_map(df['Val3_bin'], 'YlOrRd')
+colorsYr = categorical_color_map(df['Yr_bin'], 'Set2')
+colorsval1 = categorical_color_map(df['val1_bin'], 'Greens')  # created but not to be used 
+colorsval2 = categorical_color_map(df['val2_bin'], 'Greens')
+colorsEvent = categorical_color_map(df['EventGrLoss_bin'], 'Reds')
 
 
 # create a function to make legends for each metric
@@ -190,7 +190,7 @@ fl.TileLayer(
 # OVERLAY: Gross 1/100 Contribution
 # ---------------------------------------------
 fg_contribution = FeatureGroup(name='1/100 Event Loss', overlay=True)
-for _, r in nj_data.iterrows():
+for _, r in df.iterrows():
     color=colorsEvent.get(r['EventGrLoss_bin'], 'gray')
     radius=r['EventGrLoss']/2000
     
@@ -211,8 +211,8 @@ for _, r in nj_data.iterrows():
 # OVERLAY: Loss Ratio
 # ---------------------------------------------
 fg_cat_lr = FeatureGroup(name="Cat Loss Ratio", overlay=True)
-for _, r in nj_data.iterrows():
-    color=colorsLR.get(r["CatLR_bin"], "gray")
+for _, r in df.iterrows():
+    color=colorsLR.get(r["Val3_bin"], "gray")
     
     fl.CircleMarker(
         location=[r["Lat"], r["Lon"]],
@@ -227,12 +227,12 @@ for _, r in nj_data.iterrows():
 
 
 # ---------------------------------------------
-# OVERLAY: TIV
+# OVERLAY: val1
 # ---------------------------------------------
-fg_tiv = FeatureGroup(name="TIV", overlay=True)
-for _, r in nj_data.iterrows():
-    color=colorsTIV.get(r["TIV_bin"], "gray")
-    radius=(r['TIV']/1000000)*2
+fg_val1 = FeatureGroup(name="val1", overlay=True)
+for _, r in df.iterrows():
+    color=colorsval1.get(r["val1_bin"], "gray")
+    radius=(r['val1']/1000000)*2
     
     fl.CircleMarker(
         location=[r["Lat"], r["Lon"]],
@@ -242,17 +242,17 @@ for _, r in nj_data.iterrows():
         fill=True,
         fill_opacity=0.6,
         popup=fl.Popup(str(r['Popup']), max_width=300),
-        tooltip=f"TIV: ${r['TIV']:,.0f}"
-    ).add_to(fg_tiv)
+        tooltip=f"val1: ${r['val1']:,.0f}"
+    ).add_to(fg_val1)
 
 
 # ---------------------------------------------
-# OVERLAY: CovA
+# OVERLAY: val2
 # ---------------------------------------------
-fg_cova = FeatureGroup(name="CovA", overlay=True)
-for _, r in nj_data.iterrows():
-    color=colorsCovA.get(r["CovA_bin"], "gray")
-    radius=(r['CovA']/1000000)*5
+fg_val2 = FeatureGroup(name="val2", overlay=True)
+for _, r in df.iterrows():
+    color=colorsval2.get(r["val2_bin"], "gray")
+    radius=(r['val2']/1000000)*5
     
     fl.CircleMarker(
         location=[r["Lat"], r["Lon"]],
@@ -262,8 +262,8 @@ for _, r in nj_data.iterrows():
         fill=True,
         fill_opacity=0.6,
         popup=fl.Popup(str(r['Popup']), max_width=300),
-        tooltip=f"CovA: ${r['CovA']:,.0f}"
-    ).add_to(fg_cova)
+        tooltip=f"val2: ${r['val2']:,.0f}"
+    ).add_to(fg_val2)
 
 
 
@@ -272,8 +272,8 @@ for _, r in nj_data.iterrows():
 # OVERLAY: Year Built
 # ---------------------------------------------
 fg_yr = FeatureGroup(name="Yr Built", overlay=True)
-for _, r in nj_data.iterrows():
-    color=colorsYrBuilt.get(r["YrBuilt_bin"], "gray")
+for _, r in df.iterrows():
+    color=colorsYr.get(r["Yr_bin"], "gray")
     
     fl.CircleMarker(
         location=[r["Lat"], r["Lon"]],
@@ -290,8 +290,8 @@ for _, r in nj_data.iterrows():
 # ---------------------------------------------
 # Add Layers to map
 # ---------------------------------------------
-fg_tiv.add_to(m)
-fg_cova.add_to(m)
+fg_val1.add_to(m)
+fg_val2.add_to(m)
 fg_cat_lr.add_to(m)
 fg_contribution.add_to(m)
 fg_yr.add_to(m)
@@ -307,18 +307,18 @@ fl.LayerControl(collapsed=False).add_to(m)
 # Legends (fl does not have built-in categorical legend uc0u8594  HTML)
 # ---------------------------------------------
 
-# Compact TIV legend in lower-left
-tiv_legend_html = add_legend('TIV', colorsTIV)
-cova_legend_html = add_legend('CovA', colorsCovA, indent='100px')
-catlr_legend_html = add_legend('Cat LR', colorsLR, indent='200px')
+# Compact val1 legend in lower-left
+val1_legend_html = add_legend('val1', colorsval1)
+val2_legend_html = add_legend('val2', colorsval2, indent='100px')
+Val3_legend_html = add_legend('Cat LR', colorsLR, indent='200px')
 event_legend_html = add_legend('1in100 Yr Loss', colorsEvent, position='right', indent='100px')
-yr_built_legend_html = add_legend('Yr Built', colorsYrBuilt, position='right')
+yr_built_legend_html = add_legend('Yr Built', colorsYr, position='right')
 
 
 # IMPORTANT: attach to the map root BEFORE displaying map m
-m.get_root().html.add_child(Element(tiv_legend_html))
-m.get_root().html.add_child(Element(cova_legend_html))
-m.get_root().html.add_child(Element(catlr_legend_html))
+m.get_root().html.add_child(Element(val1_legend_html))
+m.get_root().html.add_child(Element(val2_legend_html))
+m.get_root().html.add_child(Element(Val3_legend_html))
 m.get_root().html.add_child(Element(event_legend_html))
 m.get_root().html.add_child(Element(yr_built_legend_html))
     
