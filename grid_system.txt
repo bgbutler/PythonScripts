@@ -34,20 +34,13 @@ pd.options.display.float_format = '{:.4f}'.format
 
 # get data
 
-df = df.rename(columns = {'SquareFootage': 'SF',
-                                   'TSv12_HU_GR_AAL': 'GrAAL',
-                                   'Event_GrossLoss_Contribution': 'EventGrLoss',
-                                   'AAL_to_Prem_Ratio': 'Cat LR',
-                                   'Latitude': 'Lat',
-                                   'Longitude': 'Lon'})
 
-df.columns
 
-nj_data = df[['TIV','Lat', 'Lon']]
+data = df[['TIV','Lat', 'Lon']]
 
 # Expect columns: lat, lon, TIV, CoverageA (names can be adapted)
 gdf = gpd.GeoDataFrame(
-    nj_data,
+    data,
     geometry=gpd.points_from_xy(df["Lon"], df["Lat"]),
     crs="EPSG:4326"
 )
