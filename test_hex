@@ -78,6 +78,9 @@ agg = (
     .reset_index()
 )
 
+# remove NA
+agg = agg[agg["grid_id"].notna()].copy()
+
 grid_out = grid.merge(agg, on="grid_id", how="left").fillna(
     {"risk_count": 0, "tiv_sum": 0.0, "covA_sum": 0.0}
 )
