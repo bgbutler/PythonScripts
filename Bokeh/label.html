@@ -1,0 +1,85 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+    
+      <meta charset="utf-8">
+      <title>label.py example</title>
+      
+      
+        
+          
+        
+        
+          
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-2.2.1.min.js" integrity="sha384-qkRvDQVAIfzsJo40iRBbxt6sttt0hv4lh74DG7OK4MCHv4C5oohXYoHUM5W11uqS" crossorigin="anonymous"></script>
+        <script type="text/javascript">
+            Bokeh.set_log_level("info");
+        </script>
+        
+      
+      
+    
+  </head>
+  
+  
+  <body>
+    
+      
+        
+          
+          
+            
+              <div class="bk-root" id="d30f495b-14cf-47e1-ba0b-363ae9ce314e" data-root-id="1132"></div>
+            
+          
+        
+      
+      
+        <script type="application/json" id="1252">
+          {"ebd4fc2f-d95f-402f-8295-d61a290d9e8f":{"roots":{"references":[{"attributes":{"source":{"id":"1130"}},"id":"1168","type":"CDSView"},{"attributes":{},"id":"1178","type":"Selection"},{"attributes":{"axis":{"id":"1146"},"dimension":1,"ticker":null},"id":"1149","type":"Grid"},{"attributes":{"text":"Dist. of 10th Grade Students at Lee High"},"id":"1133","type":"Title"},{"attributes":{"active_drag":"auto","active_inspect":"auto","active_multi":null,"active_scroll":"auto","active_tap":"auto","tools":[{"id":"1150"},{"id":"1151"},{"id":"1152"},{"id":"1153"},{"id":"1154"},{"id":"1155"}]},"id":"1157","type":"Toolbar"},{"attributes":{},"id":"1136","type":"DataRange1d"},{"attributes":{"background_fill_color":"white","border_line_color":"black","render_mode":"css","text":"Collected by Luke C. 2016-04-01","x":70,"x_units":"screen","y":70,"y_units":"screen"},"id":"1171","type":"Label"},{"attributes":{},"id":"1138","type":"LinearScale"},{"attributes":{"level":"glyph","source":{"id":"1130"},"text":{"field":"names"},"x":{"field":"weight"},"x_offset":{"value":5},"y":{"field":"height"},"y_offset":{"value":5}},"id":"1169","type":"LabelSet"},{"attributes":{},"id":"1140","type":"LinearScale"},{"attributes":{},"id":"1150","type":"PanTool"},{"attributes":{},"id":"1177","type":"UnionRenderers"},{"attributes":{"data":{"height":[66,71,72,68,58,62],"names":["Mark","Amir","Matt","Greg","Owen","Juan"],"weight":[165,189,220,141,260,174]},"selected":{"id":"1178"},"selection_policy":{"id":"1177"}},"id":"1130","type":"ColumnDataSource"},{"attributes":{"fill_alpha":{"value":0.1},"fill_color":{"value":"#1f77b4"},"line_alpha":{"value":0.1},"line_color":{"value":"#1f77b4"},"size":{"units":"screen","value":8},"x":{"field":"weight"},"y":{"field":"height"}},"id":"1166","type":"Scatter"},{"attributes":{"axis_label":"Weight (lbs)","formatter":{"id":"1173"},"ticker":{"id":"1143"}},"id":"1142","type":"LinearAxis"},{"attributes":{},"id":"1151","type":"WheelZoomTool"},{"attributes":{"data_source":{"id":"1130"},"glyph":{"id":"1165"},"hover_glyph":null,"muted_glyph":null,"nonselection_glyph":{"id":"1166"},"selection_glyph":null,"view":{"id":"1168"}},"id":"1167","type":"GlyphRenderer"},{"attributes":{},"id":"1143","type":"BasicTicker"},{"attributes":{},"id":"1173","type":"BasicTickFormatter"},{"attributes":{"overlay":{"id":"1156"}},"id":"1152","type":"BoxZoomTool"},{"attributes":{"bottom_units":"screen","fill_alpha":0.5,"fill_color":"lightgrey","left_units":"screen","level":"overlay","line_alpha":1.0,"line_color":"black","line_dash":[4,4],"line_width":2,"right_units":"screen","top_units":"screen"},"id":"1156","type":"BoxAnnotation"},{"attributes":{"axis":{"id":"1142"},"ticker":null},"id":"1145","type":"Grid"},{"attributes":{},"id":"1153","type":"SaveTool"},{"attributes":{},"id":"1175","type":"BasicTickFormatter"},{"attributes":{"fill_color":{"value":"#1f77b4"},"line_color":{"value":"#1f77b4"},"size":{"units":"screen","value":8},"x":{"field":"weight"},"y":{"field":"height"}},"id":"1165","type":"Scatter"},{"attributes":{"axis_label":"Height (in)","formatter":{"id":"1175"},"ticker":{"id":"1147"}},"id":"1146","type":"LinearAxis"},{"attributes":{"below":[{"id":"1142"}],"center":[{"id":"1145"},{"id":"1149"},{"id":"1169"},{"id":"1171"}],"left":[{"id":"1146"}],"renderers":[{"id":"1167"}],"title":{"id":"1133"},"toolbar":{"id":"1157"},"x_range":{"id":"1131"},"x_scale":{"id":"1138"},"y_range":{"id":"1136"},"y_scale":{"id":"1140"}},"id":"1132","subtype":"Figure","type":"Plot"},{"attributes":{},"id":"1154","type":"ResetTool"},{"attributes":{"end":275,"start":140},"id":"1131","type":"Range1d"},{"attributes":{},"id":"1147","type":"BasicTicker"},{"attributes":{},"id":"1155","type":"HelpTool"}],"root_ids":["1132"]},"title":"Bokeh Application","version":"2.2.1"}}
+        </script>
+        <script type="text/javascript">
+          (function() {
+            var fn = function() {
+              Bokeh.safely(function() {
+                (function(root) {
+                  function embed_document(root) {
+                    
+                  var docs_json = document.getElementById('1252').textContent;
+                  var render_items = [{"docid":"ebd4fc2f-d95f-402f-8295-d61a290d9e8f","root_ids":["1132"],"roots":{"1132":"d30f495b-14cf-47e1-ba0b-363ae9ce314e"}}];
+                  root.Bokeh.embed.embed_items(docs_json, render_items);
+                
+                  }
+                  if (root.Bokeh !== undefined) {
+                    embed_document(root);
+                  } else {
+                    var attempts = 0;
+                    var timer = setInterval(function(root) {
+                      if (root.Bokeh !== undefined) {
+                        clearInterval(timer);
+                        embed_document(root);
+                      } else {
+                        attempts++;
+                        if (attempts > 100) {
+                          clearInterval(timer);
+                          console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing");
+                        }
+                      }
+                    }, 10, root)
+                  }
+                })(window);
+              });
+            };
+            if (document.readyState != "loading") fn();
+            else document.addEventListener("DOMContentLoaded", fn);
+          })();
+        </script>
+    
+  </body>
+  
+</html>
